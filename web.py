@@ -49,7 +49,7 @@ class EmotionProcessor(VideoProcessorBase):
 
     def recv(self, frame):
         current_time = time.time()
-        if current_time - self.last_capture_time < 2:  # Capture every 2 seconds
+        if current_time - self.last_capture_time < 0.5:  # Capture every 0.5 seconds
             return frame
 
         self.last_capture_time = current_time
@@ -57,15 +57,21 @@ class EmotionProcessor(VideoProcessorBase):
         try:
             img = frame.to_ndarray(format="bgr24")
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            faces = self.face_cascade.detectMultiScale(gray, 1.1, 4)
+            
+            # Resize for faster face detection
+            small_gray = cv2.resize(gray, (0, 0), fx=0.25, fy=0.25)
+            faces = self.face_cascade.detectMultiScale(small_gray, 1.1, 4)
+
             for (x, y, w, h) in faces:
+                # Scale coordinates back up
+                x, y, w, h = x * 4, y * 4, w * 4, h * 4
                 roi = img[y:y+h, x:x+w]
                 processed_img = preprocess_image(roi)
                 prediction = model.predict(np.expand_dims(processed_img, axis=0))
                 predicted_class = emotion_classes[np.argmax(prediction)]
                 logging.info(f"Predicted class: {predicted_class}")
                 cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 0), 2)
-                cv2.putText(img, predicted_class, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+                cv2.putText(img, predicted_class, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
 
             return av.VideoFrame.from_ndarray(img, format="bgr24")
         except Exception as e:
