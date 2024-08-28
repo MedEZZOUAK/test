@@ -49,7 +49,7 @@ class EmotionProcessor(VideoProcessorBase):
 
     def recv(self, frame):
         current_time = time.time()
-        if current_time - self.last_capture_time < 0.5:  # Capture every 0.5 seconds
+        if current_time - self.last_capture_time < 0.1:  # Capture every 0.5 seconds
             return frame
 
         self.last_capture_time = current_time
