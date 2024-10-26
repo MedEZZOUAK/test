@@ -1,7 +1,6 @@
-streamlit
+streamlit==1.38.0
 tensorflow
 opencv-python-headless
 numpy
-streamlit-webrtc
-pyngrok
+streamlit-webrtc==0.47.9
 av
