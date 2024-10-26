@@ -9,6 +9,9 @@ import time
 import sys
 import os
 
+# Global variable declarations
+model = None
+
 # Configure page
 st.set_page_config(
     page_title="Emotion Classification",
@@ -24,12 +27,6 @@ logger = logging.getLogger(__name__)
 RTC_CONFIGURATION = RTCConfiguration(
     {"iceServers": [
         {"urls": ["stun:stun.l.google.com:19302", "stun:stun2.l.google.com:19302"]},
-        # Add TURN server if needed
-        # {
-        #     "urls": "turn:your-turn-server.com:3478",
-        #     "username": "your-username",
-        #     "credential": "your-password"
-        # }
     ]}
 )
 
@@ -46,7 +43,6 @@ def load_model():
             logger.error(f"Model file not found at {model_path}")
             return None
             
-        # Log model file size
         model_size = os.path.getsize(model_path) / (1024 * 1024)
         logger.info(f"Model file size: {model_size:.2f} MB")
         
@@ -73,6 +69,7 @@ class EmotionProcessor(VideoProcessorBase):
         super().__init__()
         self.last_capture_time = time.time()
         self.connection_status = "Initializing..."
+        self.model = model  # Store model reference in the instance
         try:
             self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
             if self.face_cascade.empty():
@@ -96,8 +93,12 @@ class EmotionProcessor(VideoProcessorBase):
             logger.warning("Received empty frame")
             return None
 
+        if self.model is None:
+            logger.error("Model not loaded")
+            return frame
+
         current_time = time.time()
-        if current_time - self.last_capture_time < 0.5:  # Process every 0.5 seconds
+        if current_time - self.last_capture_time < 0.5:
             return frame
 
         self.last_capture_time = current_time
@@ -106,15 +107,12 @@ class EmotionProcessor(VideoProcessorBase):
             img = frame.to_ndarray(format="bgr24")
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             
-            # Optimize face detection with smaller image
             small_gray = cv2.resize(gray, (0, 0), fx=0.25, fy=0.25)
             faces = self.face_cascade.detectMultiScale(small_gray, 1.1, 4)
             
             for (x, y, w, h) in faces:
-                # Scale coordinates back up
                 x, y, w, h = x * 4, y * 4, w * 4, h * 4
                 
-                # Ensure ROI is within image bounds
                 x = max(0, x)
                 y = max(0, y)
                 w = min(w, img.shape[1] - x)
@@ -128,11 +126,10 @@ class EmotionProcessor(VideoProcessorBase):
                 if processed_img is None:
                     continue
                     
-                prediction = model.predict(np.expand_dims(processed_img, axis=0))
+                prediction = self.model.predict(np.expand_dims(processed_img, axis=0))
                 predicted_class = EMOTION_CLASSES[np.argmax(prediction)]
                 confidence = float(np.max(prediction))
                 
-                # Draw results on image
                 cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 0), 2)
                 label = f"{predicted_class} ({confidence:.2f})"
                 cv2.putText(img, label, (x, y-10), 
@@ -159,8 +156,7 @@ def main():
         st.sidebar.write(f"OpenCV version: {cv2.__version__}")
         st.sidebar.write(f"Streamlit version: {st.__version__}")
         
-        # Check if model is loaded
-        if 'model' in globals() and model is not None:
+        if model is not None:
             st.sidebar.success("Model is loaded")
         else:
             st.sidebar.error("Model is not loaded")
